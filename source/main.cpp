@@ -64,5 +64,12 @@ int main()
 #endif
     ModuleFT232RL module_;
     std::cout << module_ << std::endl;
+    std::vector<uint32_t> frame = { 1, 2, 4, 5, 6, 7, 8 };
+    module_.writeData32( frame );
+    std::vector<uint32_t> retFrame( frame.size(), 0 );
+    module_.readData32( retFrame );
+    for( const auto it : retFrame )
+        std::cout << it << ' ';
+    std::cout << std::endl;
     return 0;
 }
