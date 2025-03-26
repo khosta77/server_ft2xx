@@ -18,6 +18,7 @@ extern "C"
 class ModuleFT232RL
 {
     unsigned int device_id_;
+	int baudrate_;
 
     // http://microsin.net/programming/pc/ftdi-d2xx-functions-api.html - ds
 	FT_HANDLE ftHandle;
@@ -28,7 +29,6 @@ class ModuleFT232RL
 	DWORD BytesReceived;
     DWORD BytesWritten;
 
-	int baudrate_ = 9600;
 
 	struct DeviceInfo
     {
@@ -65,7 +65,7 @@ class ModuleFT232RL
 	}
 
 public:
-	ModuleFT232RL( const int &dev_id = 0 ) : device_id_(dev_id)
+	ModuleFT232RL( const int dev_id = 0, const int baudrate = 9600 ) : device_id_(dev_id), baudrate_(baudrate)
     {
 		getDeviceInfo();
 
@@ -73,6 +73,13 @@ public:
             throw ModuleFT2xxException( code );
 
         this->setBaudRate();
+        this->setUSBParametrs();
+
+        // Настройка таймаутов
+        FT_SetTimeouts(ftHandle, 1000, 1000); // read, write в ms
+
+        // Использование событий (Linux/macOS)
+        FT_SetEventNotification(ftHandle, FT_EVENT_RXCHAR, 0);
 	}
 
 	~ModuleFT232RL()
@@ -80,6 +87,8 @@ public:
 		FT_Close(ftHandle);
 	}
 
+    /* @brief BaudRate
+     * */
     void setBaudRate( const int baudrate = 9600 )
     {
         if( FT_STATUS code = FT_SetBaudRate( ftHandle, baudrate ); code != FT_OK )
@@ -87,11 +96,21 @@ public:
 
         baudrate_ = baudrate;
 	}
+
+    /* @brief Установить параметры USB, Увеличение буферов (перед открытием устройства)
+     * @param dwRxSize - размер буфера на прием
+     * @param dwTxSize - размер буфера на отдачу
+     * */
+    void setUSBParametrs( const int dwRxSize = 65536, const int dwTxSize = 65536 )
+    {
+        if( FT_STATUS code = FT_SetUSBParameters( ftHandle, dwRxSize, dwTxSize ); code != FT_OK )
+            throw ModuleFT2xxException( code );
+    }
     
-    /** @brief setCharacteristics - задание характеристик передачи
-     *  @param wordlenght - количество бит на слово (фрейм) - тут должно быть значение FT_BITS_8 или FT_BITS_7
-     *  @param stopbit - количество стоп-бит - должно быть FT_STOP_BITS_1 или FT_STOP_BITS_2
-     *  @param parity - четность - должно быть FT_PARITY_NONE, FT_PARITY_ODD, FT_PARITY_EVEN, \
+    /* @brief setCharacteristics - задание характеристик передачи
+     * @param wordlenght - количество бит на слово (фрейм) - тут должно быть значение FT_BITS_8 или FT_BITS_7
+     * @param stopbit - количество стоп-бит - должно быть FT_STOP_BITS_1 или FT_STOP_BITS_2
+     * @param parity - четность - должно быть FT_PARITY_NONE, FT_PARITY_ODD, FT_PARITY_EVEN, \
      *                  FT_PARITY_MARK или FT_PARITY SPACE
      * */
     void setCharacteristics( const UCHAR &wordlenght = FT_BITS_8, 
