@@ -1,0 +1,51 @@
+title Взаимодействие пользователя с сервером FT23
+
+actor User_1
+actor User_2
+actor User_x
+
+participantgroup #lightgreen **Микросервис** 
+
+participant Server
+activate Server
+
+participantgroup  **Класс модуля** 
+
+participant FT2xxRx
+activate FT2xxRx
+
+participant FT2xxTx
+activate FT2xxTx
+
+end
+
+participantgroup **Физический\nмодуль** 
+
+participant FT2xx
+activate FT2xx
+
+end
+
+end
+
+User_1->>Server: сообщение\nс именем
+User_2->>Server: сообщение\nс именем
+User_x->>Server: сообщение\nс именем
+
+alt Отправка сообщений от первого пользователя
+User_1->>Server: сообщение с текстом
+Server->FT2xxTx: сообщение для отправки
+FT2xxTx->FT2xx:   В модуль
+else Отправка сообщений от Х пользователя
+User_x->>Server: сообщение с текстом
+Server->FT2xxTx: сообщение для отправки
+FT2xxTx->FT2xx:   В модуль
+end
+
+alt Прием
+FT2xxRx<-FT2xx:                                  В класс
+Server<-FT2xxRx: 
+User_1->>Server: сообщение с текстом
+Server->FT2xxTx: сообщение для отправки
+FT2xxTx->FT2xx:   В модуль
+end
