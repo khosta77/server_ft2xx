@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package CommandToTalk;
+
+message Message {
+  uint32 msgId = 1;      // id сообщения
+  string text = 2;
+}
+
+message WhoWantsToTalkToMe {
+  string whoami = 1;     // Имя того, кто обращается к сервису
+}
+
+message ImOkay {
+  uint32 status = 1;     // Если сообщение успешно получено, надо отправить ответ, что все окей
+}
