@@ -17,13 +17,22 @@ endif()
 include_directories("${FTD2XX_DIR}")
 
 add_compile_options(-O2)
-#add_compile_options(-Wall)
-#add_compile_options(-Werror)
-#add_compile_options(-Wextra)
-#add_compile_options(-Wsign-compare)
-#add_compile_options(-Wno-unknown-attributes)
 
-add_executable(a.out ./source/main.cpp)
+add_compile_options(-Wall)
+add_compile_options(-Werror)
+add_compile_options(-Wextra)
+add_compile_options(-Wsign-compare)
+add_compile_options(-Wno-unknown-attributes)
+
+add_executable(
+    a.out
+    ./source/main.cpp
+    ./source/exceptions.cpp
+    ./source/ModuleFT232RL.cpp
+    ./source/server.cpp
+    ./source/universalservermethods.cpp
+)
+
 target_include_directories(a.out PUBLIC ${FTD2XX_LIB})
 target_link_libraries(a.out PRIVATE ${FTD2XX_LIB})
 
