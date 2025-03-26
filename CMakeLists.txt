@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(FTD2XX_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ft2xx")
-set(FTD2XX_LIB "${FTD2XX_DIR}/libftd2xx.dylib")
+set(FTD2XX_LIB "${CMAKE_CURRENT_SOURCE_DIR}/libftd2xx.dylib")
 
 # Проверяем, существует ли библиотека
 if(NOT EXISTS "${FTD2XX_LIB}")
@@ -24,8 +24,8 @@ add_compile_options(-O2)
 #add_compile_options(-Wno-unknown-attributes)
 
 add_executable(a.out ./source/main.cpp)
-#target_include_directories(a.out PUBLIC ${FTD2XX_LIB})
-#target_link_libraries(a.out PRIVATE ${FTD2XX_LIB})
+target_include_directories(a.out PUBLIC ${FTD2XX_LIB})
+target_link_libraries(a.out PRIVATE ${FTD2XX_LIB})
 
 target_link_libraries(a.out PRIVATE "${FTD2XX_LIB}")
 
