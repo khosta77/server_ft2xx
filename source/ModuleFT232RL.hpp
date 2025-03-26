@@ -64,30 +64,6 @@ class ModuleFT232RL
             throw ModuleFT2xxException( code );
 	}
 
-    template<typename T>
-    void writeData( const std::vector<T>& frame_ )
-    {
-        const size_t SIZE = ( sizeof(T) * frame_.size() );
-        std::vector<uint8_t> buffer_( SIZE );
-
-        std::memcpy( buffer_.data(), frame_.data(), SIZE );
-
-        if( FT_STATUS code = FT_Write( ftHandle, buffer_.data(), SIZE, &BytesWritten ); code != FT_OK )
-            throw ModuleFT2xxException( code );
-	}
-
-    template<typename T>
-	void readData( std::vector<T>& frame_ )
-    {
-        const size_t SIZE = ( sizeof(T) * frame_.size() );
-        std::vector<uint8_t> buffer_( SIZE );
-
-        if( FT_STATUS code = FT_Read( ftHandle, buffer_.data(), SIZE, &BytesReceived ); code != FT_OK )
-            throw ModuleFT2xxException( code );
-
-        std::memcpy( frame_.data(), buffer_.data(), SIZE );
-	}
-
 public:
 	ModuleFT232RL( const int &dev_id = 0 ) : device_id_(dev_id)
     {
@@ -130,17 +106,77 @@ public:
      *        какие-то и задержки, в общем они не работали
 	 * @param frame_ - массив, который отправляем
 	 * */
-	void writeData8( const std::vector<uint8_t>& frame_ ) { return writeData<uint8_t>( frame_ ); }
-    void writeData16( const std::vector<uint16_t>& frame_ ) { return writeData<uint16_t>( frame_ ); }
-    void writeData32( const std::vector<uint32_t>& frame_ ) { return writeData<uint32_t>( frame_ ); }
+    template<typename T>
+    void writeData( const std::vector<T>& frame_, const bool tail = false )
+    {
+        const size_t SIZE = ( sizeof(T) * frame_.size() );
+        std::vector<uint8_t> buffer_( SIZE );
 
-	/* @brief функция читает данные с устройства. В примере использования FT_Read были еще статусы
+        std::memcpy( buffer_.data(), frame_.data(), SIZE );
+        if( tail )
+            buffer_.push_back( 0xAA );
+
+        if( FT_STATUS code = FT_Write( ftHandle, buffer_.data(), ( ( tail ) ? ( SIZE + 2 ) : SIZE ),
+                &BytesWritten ); code != FT_OK )
+            throw ModuleFT2xxException( code );
+	}
+
+    void waitWriteSuccess()
+    {
+        DWORD RxBytes = 1, TxBytes = 1, SxBytes = 1;
+        while( TxBytes != 0 )
+        {
+            if( FT_STATUS code = FT_GetStatus( ftHandle, &RxBytes, &TxBytes, &SxBytes ); code != FT_OK )
+                throw ModuleFT2xxException( code );
+            std::cout << RxBytes << ' ' << TxBytes << ' ' << SxBytes << ' ' << BytesWritten << std::endl;
+        }
+    }
+	
+    /* @brief функция читает данные с устройства. В примере использования FT_Read были еще статусы
      *        какие-то и задержки, в общем они не работали
 	 * @param frame_ - массив, который считываем. НАДО ЗАРАНЕЕ ЗНАТЬ ЕГО РАЗМЕР
 	 * */
-    void readData8( std::vector<uint8_t>& frame_ ) { return readData<uint8_t>( frame_ ); }
-	void readData16( std::vector<uint16_t>& frame_ ) { return readData<uint16_t>( frame_ ); }
-	void readData32( std::vector<uint32_t>& frame_ ) { return readData<uint32_t>( frame_ ); }
+    template<typename T>
+	void readData( std::vector<T>& frame_ )
+    {
+        const size_t SIZE = ( sizeof(T) * frame_.size() );
+        std::vector<uint8_t> buffer_( SIZE );
+
+        if( FT_STATUS code = FT_Read( ftHandle, buffer_.data(), SIZE, &BytesReceived ); code != FT_OK )
+            throw ModuleFT2xxException( code );
+
+        std::memcpy( frame_.data(), buffer_.data(), SIZE );
+	}
+
+ 
+    size_t checkRXChannel() const
+    {
+        DWORD RxBytes;
+        if( FT_STATUS code = FT_GetQueueStatus( ftHandle, &RxBytes ); code != FT_OK )
+            throw ModuleFT2xxException( code );
+        return static_cast<size_t>( RxBytes );
+    }
+
+    template<typename T>
+    std::vector<T> read( const size_t timeout = 1000 )
+    {
+        while( checkRXChannel() == 0 );
+
+        size_t newCurrentValue = checkRXChannel();
+        for( size_t i = 0; i < timeout; ++i )
+        {
+            size_t buffer = checkRXChannel();
+            if( buffer != newCurrentValue )
+            {
+                newCurrentValue = buffer;
+                i = 0;
+            }
+        }
+
+        std::vector<T> message_( ( newCurrentValue / sizeof(T) ), 0 );
+        readData<T>( message_ );
+        return message_;
+    }
 
     friend std::ostream& operator<<( std::ostream&, const ModuleFT232RL& );
 };
