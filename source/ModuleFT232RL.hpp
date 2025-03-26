@@ -6,26 +6,29 @@
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 
 extern "C"
 {
 #include "ftd2xx.h"
 };
 
+#include "exceptions.hpp"
+
 class ModuleFT232RL
 {
-    const int device_id_;
+    unsigned int device_id_;
 
     // http://microsin.net/programming/pc/ftdi-d2xx-functions-api.html - ds
 	FT_HANDLE ftHandle;
-	FT_STATUS ftStatus;
-	DWORD EventDWord;
-	DWORD TxBytes;
-	DWORD RxBytes;
+	//[[ maybe_unused ]] FT_STATUS ftStatus;
+	//[[ maybe_unused ]] DWORD EventDWord;
+	//[[ maybe_unused ]] DWORD TxBytes;
+	//[[ maybe_unused ]] DWORD RxBytes;
 	DWORD BytesReceived;
     DWORD BytesWritten;
 
-	int bauderate = 9600;
+	int baudrate_ = 9600;
 
 	struct DeviceInfo
     {
@@ -40,103 +43,60 @@ class ModuleFT232RL
 		FT_HANDLE ftHandleTemp_;
 	} device_info_[3];
 
-	bool ftStatusException( const int &module)
-    {
-		if (ftStatus == FT_OK)
-			return true;
-		switch (module) {
-			case 0: {  // FT_Open
-				printf("---> Ошибка FT_Open()\n");
-				break;
-			}
-			case 1: {  // FT_SetBaudRate
-				printf("---> Ошибка FT_SetBaudRate, BaudeRate остался %d\n", bauderate);
-				break;
-			}
-			case 2: {  // FT_Write
-				printf("---> Ошибка FT_Write, передача не прошла\n");
-				break;
-			}
-			case 3: {
-				printf("---> Ошибка FT_Read, передача не прошла\n");
-				break;
-			}
-			case 4: {
-				printf("---> Ошибка FT_GetDeviceInfoDetail, информации о девайсе не получено\n");
-				break;
-			}
-			case 5: {
-				printf("---> Ошибка FT_CreateDeviceInfoList, не удалось определить количество подключенных устройств\n");
-                break;
-			}
-            case 6: {
-                printf("---> Ошибка FT_GetStatus, возникли траблы\n");
-                break;
-            }
-			default: {
-				printf("!!!> Ошибка в неизвестном методе: %d\n", module);
-			}
-		};
-		return false;
-	}
-
-	bool getDeviceInfo()
+	void getDeviceInfo()
     {
 		DWORD numDevs;
-		bool buffer = false;
 
-		ftStatus = FT_CreateDeviceInfoList(&numDevs);
-		buffer = ftStatusException(5);
+        if( FT_STATUS code = FT_CreateDeviceInfoList( &numDevs ); code != FT_OK )
+            throw ModuleFT2xxException( code );
 		
-        if( !buffer )
-			return buffer;
+        if( ( ( device_id_ < 0 ) and ( device_id_ >= numDevs ) ) )
+            throw ModuleFT2xxException( FT_DEVICE_NOT_FOUND );
 		
-        if( ( device_id_ < 0 ) && ( device_id_ >= numDevs ) )
-			return false;
-		
-        ftStatus = FT_GetDeviceInfoDetail(
-            device_id_,
-            &device_info_[device_id_].flags_,
-            &device_info_[device_id_].type_,
-            &device_info_[device_id_].id_,
-			&device_info_[device_id_].locId_,
-            device_info_[device_id_].serialNumber_,
-            device_info_[device_id_].description_, 
-			&device_info_[device_id_].ftHandleTemp_
+        FT_STATUS code = FT_GetDeviceInfoDetail(
+            device_id_, &device_info_[device_id_].flags_, &device_info_[device_id_].type_,
+            &device_info_[device_id_].id_, &device_info_[device_id_].locId_,
+            device_info_[device_id_].serialNumber_, device_info_[device_id_].description_,
+            &device_info_[device_id_].ftHandleTemp_
         );
-		
-        return ftStatusException(4);
+
+        if( code != FT_OK )
+            throw ModuleFT2xxException( code );
 	}
 
     template<typename T>
-    bool writeData( T *df, const size_t &size )
+    void writeData( const std::vector<T>& frame_ )
     {
-		uint8_t buffer_array[( sizeof(T) * size )];
-		memcpy(buffer_array, df, (sizeof(T) * size));
-        ftStatus = FT_Write( ftHandle, &buffer_array[0], (sizeof(uint16_t) * size), &BytesWritten );
-		return ftStatusException(2);
+        const size_t SIZE = ( sizeof(T) * frame_.size() );
+        std::vector<uint8_t> buffer_( SIZE );
+
+        std::memcpy( buffer_.data(), frame_.data(), SIZE );
+
+        if( FT_STATUS code = FT_Write( ftHandle, buffer_.data(), SIZE, &BytesWritten ); code != FT_OK )
+            throw ModuleFT2xxException( code );
 	}
 
     template<typename T>
-	bool readData( T *df, const size_t &size )
+	void readData( std::vector<T>& frame_ )
     {
-		uint8_t buffer_array[( sizeof(T) * size )];
-		bool buffer = false;
-		ftStatus = FT_Read( ftHandle, &buffer_array[0], ( sizeof(T) * size ), &BytesReceived );
-		buffer = ftStatusException(3);
-		if (buffer)
-			memcpy(df, buffer_array, ( size * sizeof(T) ) );
-		return buffer;
+        const size_t SIZE = ( sizeof(T) * frame_.size() );
+        std::vector<uint8_t> buffer_( SIZE );
+
+        if( FT_STATUS code = FT_Read( ftHandle, buffer_.data(), SIZE, &BytesReceived ); code != FT_OK )
+            throw ModuleFT2xxException( code );
+
+        std::memcpy( frame_.data(), buffer_.data(), SIZE );
 	}
 
 public:
 	ModuleFT232RL( const int &dev_id = 0 ) : device_id_(dev_id)
     {
-		bool buffer = getDeviceInfo();
-		if (!buffer)
-			throw;
-		ftStatus = FT_Open( device_id_, &ftHandle );
-		buffer = ftStatusException(0);
+		getDeviceInfo();
+
+        if( FT_STATUS code = FT_Open( device_id_, &ftHandle ); code != FT_OK )
+            throw ModuleFT2xxException( code );
+
+        this->setBaudRate();
 	}
 
 	~ModuleFT232RL()
@@ -144,12 +104,12 @@ public:
 		FT_Close(ftHandle);
 	}
 
-	bool setBaudRate( const int &br = 9600 )
+    void setBaudRate( const int baudrate = 9600 )
     {
-	    ftStatus = FT_SetBaudRate(ftHandle, br);
-		bool buffer = ftStatusException(1);
-		bauderate = (buffer) ? br : bauderate;
-		return buffer;
+        if( FT_STATUS code = FT_SetBaudRate( ftHandle, baudrate ); code != FT_OK )
+            throw ModuleFT2xxException( code );
+
+        baudrate_ = baudrate;
 	}
     
     /** @brief setCharacteristics - задание характеристик передачи
@@ -158,33 +118,29 @@ public:
      *  @param parity - четность - должно быть FT_PARITY_NONE, FT_PARITY_ODD, FT_PARITY_EVEN, \
      *                  FT_PARITY_MARK или FT_PARITY SPACE
      * */
-    bool setCharacteristics(
-        const UCHAR &wordlenght = FT_BITS_8,
-        const UCHAR &stopbit = FT_STOP_BITS_1,
-        const UCHAR &parity = FT_PARITY_NONE
-    )
+    void setCharacteristics( const UCHAR &wordlenght = FT_BITS_8, 
+        const UCHAR &stopbit = FT_STOP_BITS_1, const UCHAR &parity = FT_PARITY_NONE )
     {
-        ftStatus = FT_SetDataCharacteristics( ftHandle, FT_BITS_8, FT_STOP_BITS_1, FT_PARITY_NONE );
-        return ftStatusException(10);
+        FT_STATUS code = FT_SetDataCharacteristics( ftHandle, wordlenght, stopbit, parity );
+        if( code != FT_OK )
+            throw ModuleFT2xxException( code );
     }
 
 	/* @brief функция отправляет данные на устройство. В примере использования FT_Read были еще статусы
      *        какие-то и задержки, в общем они не работали
-	 * @param df - массив, который отправляем
-	 * @param size - размеры отправляемого массива
+	 * @param frame_ - массив, который отправляем
 	 * */
-	bool writeData8( uint8_t *df, const size_t &size ) { return writeData<uint8_t>( df, size ); }
-    bool writeData16( uint16_t *df, const size_t &size ) { return writeData<uint16_t>( df, size ); }
-    bool writeData32( uint32_t *df, const size_t &size ) { return writeData<uint32_t>( df, size ); }
+	void writeData8( const std::vector<uint8_t>& frame_ ) { return writeData<uint8_t>( frame_ ); }
+    void writeData16( const std::vector<uint16_t>& frame_ ) { return writeData<uint16_t>( frame_ ); }
+    void writeData32( const std::vector<uint32_t>& frame_ ) { return writeData<uint32_t>( frame_ ); }
 
 	/* @brief функция читает данные с устройства. В примере использования FT_Read были еще статусы
      *        какие-то и задержки, в общем они не работали
-	 * @param df - массив, который считаем
-	 * @param size - размеры считываемого массива
+	 * @param frame_ - массив, который считываем. НАДО ЗАРАНЕЕ ЗНАТЬ ЕГО РАЗМЕР
 	 * */
-	bool readData8(uint8_t *df, const size_t &size) { return readData<uint8_t>( df, size ); }
-	bool readData16( uint16_t *df, const size_t &size ) { return readData<uint16_t>( df, size ); }
-	bool readData32( uint32_t *df, const size_t &size ) { return readData<uint32_t>( df, size ); }
+    void readData8( std::vector<uint8_t>& frame_ ) { return readData<uint8_t>( frame_ ); }
+	void readData16( std::vector<uint16_t>& frame_ ) { return readData<uint16_t>( frame_ ); }
+	void readData32( std::vector<uint32_t>& frame_ ) { return readData<uint32_t>( frame_ ); }
 
     friend std::ostream& operator<<( std::ostream&, const ModuleFT232RL& );
 };
