@@ -1,18 +1,11 @@
 #include <iostream>
 
-#include "ModuleFT232RL.hpp"
+#include "ModuleStreamCore.hpp"
+#include "server.hpp"
 
-int main()
+int main( [[maybe_unused]] int argc, [[maybe_unused]] char* argv[] )
 {
-    ModuleFT232RL module_;
-    std::cout << module_ << std::endl;
-    std::vector<uint32_t> frame = { 1, 2, 3, 4, 5, 6, 7, 8 };
-    module_.writeData<uint32_t>( frame );
-    //std::vector<uint32_t> retFrame( frame.size(), 0 );
-    //module_.readData32( retFrame );
-    auto retFrame = module_.read<uint32_t>(10000);
-    for( const auto it : retFrame )
-        std::cout << it << ' ';
-    std::cout << std::endl;
-    return 0;
+    std::unique_ptr<UniversalServerCore> core = std::make_unique<ModuleStreamCore>();
+    Server server( "127.0.0.1", 34100, std::move( core ) );
+    return server.run();
 }
