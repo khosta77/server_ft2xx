@@ -7,6 +7,9 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
+#include <chrono>
+#include <thread>
+#include <mutex>
 
 extern "C"
 {
@@ -42,6 +45,8 @@ class ModuleFT232RL
 
 		FT_HANDLE ftHandleTemp_;
 	} device_info_[3];
+
+    mutable std::mutex mutex_;
 
 	void getDeviceInfo()
     {
@@ -91,6 +96,7 @@ public:
      * */
     void setBaudRate( const int baudrate = 9600 )
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         if( FT_STATUS code = FT_SetBaudRate( ftHandle, baudrate ); code != FT_OK )
             throw ModuleFT2xxException( code );
 
@@ -103,6 +109,7 @@ public:
      * */
     void setUSBParametrs( const int dwRxSize = 65536, const int dwTxSize = 65536 )
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         if( FT_STATUS code = FT_SetUSBParameters( ftHandle, dwRxSize, dwTxSize ); code != FT_OK )
             throw ModuleFT2xxException( code );
     }
@@ -116,6 +123,7 @@ public:
     void setCharacteristics( const UCHAR &wordlenght = FT_BITS_8, 
         const UCHAR &stopbit = FT_STOP_BITS_1, const UCHAR &parity = FT_PARITY_NONE )
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         FT_STATUS code = FT_SetDataCharacteristics( ftHandle, wordlenght, stopbit, parity );
         if( code != FT_OK )
             throw ModuleFT2xxException( code );
@@ -128,6 +136,7 @@ public:
     template<typename T>
     void writeData( const std::vector<T>& frame_, const bool tail = false )
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         const size_t SIZE = ( sizeof(T) * frame_.size() );
         std::vector<uint8_t> buffer_( SIZE );
 
@@ -142,6 +151,7 @@ public:
 
     void waitWriteSuccess()
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         DWORD RxBytes = 1, TxBytes = 1, SxBytes = 1;
         while( TxBytes != 0 )
         {
@@ -158,6 +168,7 @@ public:
     template<typename T>
 	void readData( std::vector<T>& frame_ )
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         const size_t SIZE = ( sizeof(T) * frame_.size() );
         std::vector<uint8_t> buffer_( SIZE );
 
@@ -170,6 +181,7 @@ public:
  
     size_t checkRXChannel() const
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         DWORD RxBytes;
         if( FT_STATUS code = FT_GetQueueStatus( ftHandle, &RxBytes ); code != FT_OK )
             throw ModuleFT2xxException( code );
@@ -179,7 +191,13 @@ public:
     template<typename T>
     std::vector<T> read( const size_t timeout = 1000 )
     {
-        while( checkRXChannel() == 0 );
+        while( checkRXChannel() == 0 )
+        {
+            // Это очень ужасно, но выбора нет, надо вставить мин задержку иначе, другие не раздуплятся.
+            // В целом эта задержка ресурсы не стирает, а для модуля она слишком быстрая и он разницы не
+            // заметит. Возможно надо будет увиличить
+            std::this_thread::sleep_for(std::chrono::microseconds(10));
+        }
 
         size_t newCurrentValue = checkRXChannel();
         for( size_t i = 0; i < timeout; ++i )
