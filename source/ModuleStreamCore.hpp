@@ -26,7 +26,7 @@ private:
     }
 public:
 
-    ModuleStreamCore( const int id = 0 ) : module_ft2xx_(id), infinit_work_(true)
+    ModuleStreamCore( const int id = 0, const int baudrate = 9600 ) : module_ft2xx_(id, baudrate), infinit_work_(true)
     {
         read_ = std::thread( &ModuleStreamCore::ThreadFoo, this );
         std::cout << module_ft2xx_ << std::endl;
