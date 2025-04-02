@@ -1,47 +1,60 @@
 cmake_minimum_required(VERSION 3.10)
 project(MyFTDIProject)
 
-include_directories(/opt/homebrew/opt/protobuf/include)
-include_directories(/opt/homebrew/opt/abseil/include)
-link_directories(/opt/homebrew/opt/protobuf/lib)
-link_directories(/opt/homebrew/opt/abseil/lib)
+if(APPLE)  # Код для MacOS
+    include_directories(/opt/homebrew/opt/boost/include)
+
+    include_directories(/opt/homebrew/opt/openssl/include)
+    link_directories(/opt/homebrew/opt/openssl/lib)
+
+    include_directories(/opt/homebrew/opt/libpqxx/include)
+    include_directories(/opt/homebrew/opt/libpq/include)
+    link_directories(/opt/homebrew/opt/libpqxx/lib)
+    link_directories(/opt/homebrew/opt/libpq/lib)
+
+    include_directories(/opt/homebrew/opt/protobuf/include)
+    include_directories(/opt/homebrew/opt/abseil/include)
+    link_directories(/opt/homebrew/opt/protobuf/lib)
+    link_directories(/opt/homebrew/opt/abseil/lib)
+else()
+
+endif()
 
 find_package(Protobuf REQUIRED)
 find_package(absl REQUIRED)
 
-execute_process(
-    COMMAND bash -c "rm ./source/proto/message.pb.h ./source/proto/message.pb.cc"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
-execute_process(
-    COMMAND bash -c "ls ./source/proto/ | grep pb | wc -l"
-    OUTPUT_VARIABLE RESULT_FROM_CHECK
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
+function(GENERATE_PROTO_FILES OUTPUT_VAR)
+    set(PROTO_DIR "${CMAKE_SOURCE_DIR}/source/proto")
+    set(GENERATED_SRCS "")
 
-if(NOT RESULT_FROM_CHECK EQUAL "0")
-    message(FATAL_ERROR "-- fuck me ${RESULT_FROM_CHECK}")
-endif()
+    foreach(PROTO_BASENAME IN ITEMS ${ARGN})
+        file(REMOVE "${PROTO_DIR}/${PROTO_BASENAME}.pb.h" "${PROTO_DIR}/${PROTO_BASENAME}.pb.cc")
 
-execute_process(
-    COMMAND bash -c "cd ./source/proto/; protoc --cpp_out=. message.proto; cd ./../.."
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
-execute_process(
-    COMMAND bash -c "ls ./source/proto/ | grep pb | wc -l"
-    OUTPUT_VARIABLE RESULT_FROM_CHECK
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
+        execute_process(
+            COMMAND protoc --cpp_out=${PROTO_DIR} "${PROTO_BASENAME}.proto"
+            WORKING_DIRECTORY ${PROTO_DIR}
+            RESULT_VARIABLE RESULT
+        )
 
-if(RESULT_FROM_CHECK EQUAL "2")
-    message("-- proto files generate")
-else()
-    message(FATAL_ERROR "-- fuck me ${RESULT_FROM_CHECK}")
-endif()
+        if(NOT RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to generate protobuf files for ${PROTO_BASENAME}.proto")
+        endif()
 
-set(PROTO_DIR source/proto)
-set(PROTO_FILE ${CMAKE_CURRENT_BINARY_DIR}/${PROTO_DIR}/message.proto)
-set(PROTO_SRCS ${CMAKE_CURRENT_BINARY_DIR}/${PROTO_DIR}/message.pb.cc)
+        foreach(EXTENSION pb.h pb.cc)
+            if(NOT EXISTS "${PROTO_DIR}/${PROTO_BASENAME}.${EXTENSION}")
+                message(FATAL_ERROR "File ${PROTO_DIR}/${PROTO_BASENAME}.${EXTENSION} was not generated")
+            endif()
+        endforeach()
+
+        list(APPEND GENERATED_SRCS "${PROTO_DIR}/${PROTO_BASENAME}.pb.cc")
+        message(STATUS "Generated protobuf files for ${PROTO_BASENAME}.proto")
+    endforeach()
+
+    set(${OUTPUT_VAR} ${GENERATED_SRCS} PARENT_SCOPE)
+endfunction()
+
+GENERATE_PROTO_FILES(PROTO_SRCS server)
+message(STATUS "Generated proto sources: ${PROTO_SRCS}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -79,6 +92,7 @@ add_executable(
 add_executable(
     user.out
     ./source/user.cpp
+    ./source/universalservermethods.cpp
     ${PROTO_SRCS}
 )
 
