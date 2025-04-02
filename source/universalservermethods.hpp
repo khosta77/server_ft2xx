@@ -25,7 +25,7 @@ private:
      *  обратно сообщение не отправить, ни понять что в целом происходит. Это можно задебажить костылем,
      *  где мы будет поток обрабатывать
      * */
-    const size_t MAX_BUFFER_COUNT = 1;
+    const size_t MAX_BUFFER_COUNT = 1024;
 
 public:
     UniversalServerMethods() = default;
@@ -36,9 +36,13 @@ public:
     UniversalServerMethods& operator=( const UniversalServerMethods& ) = delete;
     UniversalServerMethods& operator=( UniversalServerMethods&& ) = delete;
 
-    virtual std::string readFromSock( const int socket_ ) final; 
-    virtual void writeToSock( const int socket_, std::string msg ) final;
+    std::string readFromSock( const int socket_ ); 
+    void writeToSock( const int socket_, std::string msg );
 
+    /*
+     * @brief split - дробление всей посылки на малые части -> отдельные сообщения
+     * */
+    std::vector<std::string> split( const std::string&  );
 };
 
 #endif  // UNIVERSALSERVERMETHODS_HPP_

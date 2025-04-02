@@ -21,10 +21,10 @@
 #include <arpa/inet.h>
 #include <poll.h>
 
-//#include "proto/logs.pb.h"
+#include "proto/server.pb.h"
 
+#include "universalservercore.hpp"
 #include "universalservermethods.hpp"
-//#include "logger.hpp"
 
 
 class Server : protected UniversalServerMethods
@@ -46,7 +46,7 @@ private:
     struct sockaddr_in client_addr_;
     socklen_t client_len_ = sizeof(client_addr_);
     
-    //std::unique_ptr<Logger> logger_;
+    std::unique_ptr<UniversalServerCore> core_;
 
     /*
      *  @brief launchServer - запускает сервер
@@ -66,21 +66,21 @@ private:
     /*
      * @brief ifMessageEmptyCloseSocket - Метод для закрытия сокетов, если сообщения пустые
      * */
-    bool ifMessageEmptyCloseSocket( const int i, std::string& message );
+    bool ifMessageEmptyCloseSocket( const int );
     
     /*
      * @brief get_WhoAmI_Info - надо проверить при первом подключении, что, тот с кем хотим
      *                          работать имеет имя
      * @see Диаграмму С4
      * */
-    bool get_WhoAmI_Info( const int i, std::string& message );
+    bool get_WhoAmI_Info( const int, std::string& );
 
     /*
      * @brief processTheRequest - когда проверки доходят до этого метода можно быть увереным,
      *                            что у нас нормальное сообщение, единственное в чем может остатся косяк,
      *                            это некорректное будет от protobuf
      * */
-    void processTheRequest( const int i, std::string& message );
+    void processTheRequest( const int, std::string& );
 
     /*
      * @brief checkingSocketsOnNewContent - проверяет какие сообщения пришли от сокетов пользователей
@@ -88,7 +88,7 @@ private:
     void checkingSocketsOnNewContent();
 
 public:
-    Server( const std::string& IP, const int& PORT,  std::unique_ptr<Logger> logger );
+    Server( const std::string&, const int&,  std::unique_ptr<UniversalServerCore> );
     Server( const Server& ) = delete;
     Server( Server&& ) = delete;
     Server& operator=( const Server& ) = delete;

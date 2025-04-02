@@ -61,11 +61,8 @@ void Server::checkingSocketsOnNewConnect()
 /*
  * @brief ifMessageEmptyCloseSocket - Метод для закрытия сокетов, если сообщения пустые
  * */
-bool Server::ifMessageEmptyCloseSocket( const int i, std::string& message )
+bool Server::ifMessageEmptyCloseSocket( const int i )
 {
-    if( !message.empty() )
-        return false;
-
     int buf = fds_[i].fd;
     for( auto client = clients_name_.begin(); client != clients_name_.end(); ++client )
     {
@@ -91,7 +88,7 @@ bool Server::get_WhoAmI_Info( const int i, std::string& message )
     if( clients_name_.count( fds_[i].fd ) )
         return false;
 
-     logs::WhoWantsToTalkToMe wwttm_;
+    ServerInteraction::WhoWantsToTalkToMe wwttm_;
     if( !wwttm_.ParseFromString( message ) )
     {
         std::cerr << std::format(
@@ -117,23 +114,15 @@ bool Server::get_WhoAmI_Info( const int i, std::string& message )
  * */
 void Server::processTheRequest( const int i, std::string& message )
 {
-    std::string name = clients_name_[fds_[i].fd];
-
-    logs::Log log;
-    if( !log.ParseFromString(message) )
+    try
     {
-        std::cerr << std::format( "!!!> {} -> not parse: {}\n", name, message ) << std::endl;
-        return;
+        (*core_)( fds_[i].fd, clients_name_[fds_[i].fd], message );
     }
-
-    if( !log.IsInitialized() )
+    catch( const std::exception& emsg )
     {
-        std::cerr << std::format( "!!!> {} -> not initialized: {}\n", name, message ) << std::endl;
-        return;
-    }
-
-    if( !logger_->push( fds_[i].fd, clients_name_[fds_[i].fd], log ) )
         std::cerr << "4xFUCK!!!!" << std::endl;
+        std::cerr << emsg.what() << std::endl;
+    }
 }
 
 /*
@@ -143,23 +132,37 @@ void Server::checkingSocketsOnNewContent()
 {
     for( int i = 1; i < nfds_; ++i )
     {
-        if( fds_[i].revents & POLLIN )
+        if( ( fds_[i].revents & POLLIN ) )
         {
-            std::string message = readFromSock( fds_[i].fd );
+            std::string totalMessage = readFromSock( fds_[i].fd );
+            
+            // В сообщении приходит бесконечный поток, разибраем его
+            std::vector<std::string> messages = split( std::move( totalMessage ) );
 
-            if( ifMessageEmptyCloseSocket( i, message ) )
+            if( messages.empty() )
+            {
+                ifMessageEmptyCloseSocket( i );
                 continue;
+            }
 
-            if( get_WhoAmI_Info( i, message ) )
-                continue;
+            for( std::string message : messages )
+            {
+                if( !get_WhoAmI_Info( i, message ) )
+                {
+                    processTheRequest( i, message );
+                }
 
-            processTheRequest( i, message );
+                message.clear();
+            }
+
+            totalMessage.clear();
+            messages.clear();
         }
     }
 }
 
-Server::Server( const std::string& IP, const int& PORT,  std::unique_ptr<Logger> logger ) : ip_(IP),
-    port_(PORT), logger_( std::move( logger ) )
+Server::Server( const std::string& IP, const int& PORT,  std::unique_ptr<UniversalServerCore> core ) :
+    ip_(IP), port_(PORT), core_( std::move( core ) )
 {
     server_fd_ = socket( AF_INET, SOCK_STREAM, 0 );
     if( server_fd_ == -1 )
@@ -189,6 +192,7 @@ Server::~Server()
 
 int Server::run()
 {
+    core_->Init();
     launchServer();
     settingsFileDescriptor();
 
@@ -202,8 +206,8 @@ int Server::run()
 
         checkingSocketsOnNewConnect();
         checkingSocketsOnNewContent();
-        logger_->launch();
+        core_->Launch();
     }
-    logger_->stop();
+    core_->Stop();
     return 0;
 }

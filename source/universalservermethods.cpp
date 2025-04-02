@@ -48,3 +48,22 @@ void UniversalServerMethods::writeToSock( const int socket_, std::string msg )
         totalSent += bytesSent;
     }
 }
+
+std::vector<std::string> UniversalServerMethods::split( const std::string& message )
+{
+    std::vector<std::string> result;
+    size_t start = 0;
+    size_t end = message.find("\n\n");
+    
+    while( end != std::string::npos )
+    {
+        result.push_back( message.substr( start, end - start ) );
+        start = end + 2;
+        end = message.find( "\n\n", start );
+    }
+
+    if( start < message.length() )
+        result.push_back( message.substr(start) );
+
+    return result;
+}
